@@ -19,6 +19,13 @@ class NormalizeAsString(ExprNode):
 
 
 @dataclass
+class Md5AsString(ExprNode):
+    """MD5-hash the expression and return as a normalized string. Used to avoid concatenation length errors."""
+    expr: ExprNode
+    type = str
+
+
+@dataclass
 class ApplyFuncAndNormalizeAsString(ExprNode):
     expr: ExprNode
     apply_func: Callable = None
@@ -58,11 +65,25 @@ class Compiler(Compiler):
 
 
     @md
+    def compile_node(c: Compiler, n: Md5AsString) -> str:
+        expr = c.compile(n.expr)
+        str_expr = c.dialect.to_string(expr)
+        coalesced = f"coalesce({str_expr}, '<null>')"
+        return c.dialect.to_string(c.dialect.md5_as_int(coalesced))
+
+    @md
     def compile_node(c: Compiler, n: Checksum) -> str:
         if len(n.exprs) > 1:
-            exprs = [Code(f"coalesce({c.compile(expr)}, '<null>')") for expr in n.exprs]
-            # exprs = [c.compile(e) for e in exprs]
-            expr = Concat(exprs, "|")
+            compiled = []
+            for expr in n.exprs:
+                compiled_expr = c.compile(expr)
+                # NormalizeAsString and Md5AsString already guarantee non-NULL string output,
+                # so skip the redundant coalesce wrapper for them.
+                if isinstance(expr, (NormalizeAsString, Md5AsString)):
+                    compiled.append(Code(compiled_expr))
+                else:
+                    compiled.append(Code(f"coalesce({compiled_expr}, '<null>')"))
+            expr = Concat(compiled, "|")
         else:
             # No need to coalesce - safe to assume that key cannot be null
             (expr,) = n.exprs
