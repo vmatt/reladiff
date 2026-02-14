@@ -21,7 +21,10 @@ classifiers = [
     "Topic :: Database :: Database Engines/Servers",
     "Typing :: Typed"
 ]
-packages = [{ include = "reladiff" }]
+packages = [
+    { include = "reladiff" },
+    { include = "sqeleton" }
+    ]
 
 [tool.poetry.dependencies]
 python = "^3.8"
