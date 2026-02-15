@@ -1,4 +1,5 @@
 import os
+import re
 from functools import cmp_to_key
 from numbers import Number
 import logging
@@ -26,6 +27,18 @@ DEFAULT_BISECTION_THRESHOLD = 1024 * 16
 DEFAULT_BISECTION_FACTOR = 32
 
 logger = logging.getLogger("hashdiff_tables")
+
+# Patterns for concatenation-too-long errors from various databases
+_CONCAT_TOO_LONG_PATTERNS = [
+    re.compile(r"ORA-01489", re.IGNORECASE),  # Oracle: result of string concatenation is too long
+    re.compile(r"too long and would be truncated", re.IGNORECASE),  # Snowflake
+]
+
+
+def _is_concat_too_long_error(e: Exception) -> bool:
+    """Check if the exception is a concatenation-too-long error from the database."""
+    msg = str(e)
+    return any(p.search(msg) for p in _CONCAT_TOO_LONG_PATTERNS)
 
 
 def compare_element(a, b):
@@ -189,7 +202,20 @@ class HashDiffer(TableDiffer):
             count1, count2 = self._threaded_call("count", [table1, table2])
             checksum1 = checksum2 = None
         else:
-            (count1, checksum1), (count2, checksum2) = self._threaded_call("count_and_checksum", [table1, table2])
+            try:
+                (count1, checksum1), (count2, checksum2) = self._threaded_call("count_and_checksum", [table1, table2])
+            except Exception as e:
+                if _is_concat_too_long_error(e):
+                    logger.warning(
+                        "Concatenation too long error detected. Retrying with MD5-hashed text columns."
+                    )
+                    table1 = table1.with_md5_text_columns()
+                    table2 = table2.with_md5_text_columns()
+                    (count1, checksum1), (count2, checksum2) = self._threaded_call(
+                        "count_and_checksum", [table1, table2]
+                    )
+                else:
+                    raise
 
         assert not info_tree.info.rowcounts
         info_tree.info.rowcounts = {1: count1, 2: count2}
@@ -232,7 +258,11 @@ class HashDiffer(TableDiffer):
         # If count is below the threshold, just download and compare the columns locally
         # This saves time, as bisection speed is limited by ping and query performance.
         if max_rows < self.bisection_threshold or max_space_size < self.bisection_factor * 2:
-            rows1, rows2 = self._threaded_call("get_values", [table1, table2])
+            # get_values() downloads each column individually (no concatenation),
+            # so always use non-MD5 mode to get actual values for comparison.
+            plain_table1 = table1.new(_md5_text_columns=False) if table1._md5_text_columns else table1
+            plain_table2 = table2.new(_md5_text_columns=False) if table2._md5_text_columns else table2
+            rows1, rows2 = self._threaded_call("get_values", [plain_table1, plain_table2])
             diff = list(diff_sets(rows1, rows2, self.skip_sort_results, self.duplicate_rows_support))
 
             info_tree.info.set_diff(diff)

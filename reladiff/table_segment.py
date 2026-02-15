@@ -8,10 +8,10 @@ from runtype import dataclass
 from .utils import safezip, Vector
 from sqeleton.utils import ArithString, split_space
 from sqeleton.databases import Database, DbPath, DbKey, DbTime
-from sqeleton.abcs.database_types import String_UUID
+from sqeleton.abcs.database_types import String_UUID, Text
 from sqeleton.schema import Schema, create_schema
 from sqeleton.queries import Count, Checksum, SKIP, table, this, Expr, min_, max_, Code
-from sqeleton.queries.extras import ApplyFuncAndNormalizeAsString, NormalizeAsString
+from sqeleton.queries.extras import ApplyFuncAndNormalizeAsString, NormalizeAsString, Md5AsString
 
 logger = logging.getLogger("table_segment")
 
@@ -126,6 +126,7 @@ class TableSegment:
 
     case_sensitive: bool = True
     _schema: Schema = None
+    _md5_text_columns: bool = False
 
     def __post_init__(self):
         if not self.update_column and (self.min_update or self.max_update):
@@ -206,7 +207,10 @@ class TableSegment:
 
     def get_values(self) -> list:
         "Download all the relevant values of the segment from the database"
-        select = self.make_select().select(*self._relevant_columns_repr)
+        # get_values() downloads each column individually (no concatenation),
+        # so always use plain NormalizeAsString to get actual values.
+        plain_repr = [NormalizeAsString(this[c]) for c in self.relevant_columns]
+        select = self.make_select().select(*plain_repr)
         return self.database.query(select, List[Tuple])
 
     def choose_checkpoints(self, count: int) -> List[List[DbKey]]:
@@ -250,7 +254,17 @@ class TableSegment:
 
     @property
     def _relevant_columns_repr(self) -> List[Expr]:
+        if self._md5_text_columns and self._schema:
+            return [
+                Md5AsString(this[c]) if isinstance(self._schema.get(c), Text)
+                else NormalizeAsString(this[c])
+                for c in self.relevant_columns
+            ]
         return [NormalizeAsString(this[c]) for c in self.relevant_columns]
+
+    def with_md5_text_columns(self) -> "TableSegment":
+        """Return a copy of this segment that MD5-hashes Text columns to avoid concatenation length errors."""
+        return self.new(_md5_text_columns=True)
 
     def count(self) -> int:
         """Count how many rows are in the segment, in one pass."""
@@ -330,7 +344,7 @@ class EmptyTableSegment:
         return (0, None)
 
     def __getattr__(self, attr):
-        assert attr in ("database", "key_columns", "key_types", "relevant_columns", "_schema")
+        assert attr in ("database", "key_columns", "key_types", "relevant_columns", "_schema", "_md5_text_columns")
         return getattr(self._table_segment, attr)
 
     @property
@@ -356,6 +370,9 @@ class EmptyTableSegment:
     def make_select(self):
         # XXX shouldn't be called
         return self._table_segment.make_select()
+
+    def with_md5_text_columns(self) -> "EmptyTableSegment":
+        return self
 
     def get_values(self) -> list:
         return []
