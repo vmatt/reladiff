@@ -37,7 +37,8 @@ class Mixin_MD5(AbstractMixin_MD5):
 class Mixin_NormalizeValue(AbstractMixin_NormalizeValue):
     def normalize_timestamp(self, value: str, coltype: TemporalType) -> str:
         if coltype.rounds:
-            return self.to_string(f"cast( cast({value} as datetime({coltype.precision})) as datetime(3))")
+            s = self.to_string(f"cast({value} as datetime(6))")
+            return f"LEFT({s}, {TIMESTAMP_PRECISION_POS + 3})"
 
         s = self.to_string(f"cast({value} as datetime(6))")
         return f"RPAD(RPAD({s}, {TIMESTAMP_PRECISION_POS+coltype.precision}, '.'), {TIMESTAMP_PRECISION_POS+3}, '0')"
