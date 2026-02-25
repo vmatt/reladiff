@@ -42,7 +42,7 @@ class Mixin_NormalizeValue(AbstractMixin_NormalizeValue):
 
         timestamp6 = f"to_char({value}::timestamp(6), 'YYYY-mm-dd HH24:MI:SS.US')"
         return (
-            f"RPAD(LEFT({timestamp6}, {TIMESTAMP_PRECISION_POS+coltype.precision}), {TIMESTAMP_PRECISION_POS+6}, '0')"
+            f"RPAD(LEFT({timestamp6}, {TIMESTAMP_PRECISION_POS+min(coltype.precision, 3)}), {TIMESTAMP_PRECISION_POS+3}, '0')"
         )
 
     def normalize_number(self, value: str, coltype: FractionalType) -> str:
