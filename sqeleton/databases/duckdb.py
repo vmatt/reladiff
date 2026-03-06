@@ -53,7 +53,7 @@ class Mixin_NormalizeValue(AbstractMixin_NormalizeValue):
         if coltype.rounds and coltype.precision > 0:
             return f"CONCAT(SUBSTRING(STRFTIME({value}::TIMESTAMP, '%Y-%m-%d %H:%M:%S.'),1,23), LPAD(((ROUND(strftime({value}::timestamp, '%f')::DECIMAL(15,7)/100000,{coltype.precision-1})*100000)::INT)::VARCHAR,6,'0'))"
 
-        return f"rpad(substring(strftime({value}::timestamp, '%Y-%m-%d %H:%M:%S.%f'),1,{TIMESTAMP_PRECISION_POS+coltype.precision}),26,'0')"
+        return f"rpad(substring(strftime({value}::timestamp, '%Y-%m-%d %H:%M:%S.%f'),1,{TIMESTAMP_PRECISION_POS+3}),26,'0')"
 
     def normalize_number(self, value: str, coltype: FractionalType) -> str:
         return self.to_string(f"{value}::DECIMAL(38, {coltype.precision})")
