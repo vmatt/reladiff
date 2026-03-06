@@ -49,11 +49,14 @@ class Mixin_MD5(AbstractMixin_MD5):
 class Mixin_NormalizeValue(AbstractMixin_NormalizeValue):
     def normalize_timestamp(self, value: str, coltype: TemporalType) -> str:
         if coltype.rounds:
-            timestamp = f"to_timestamp(round(date_part(epoch_nanosecond, convert_timezone('UTC', {value})::timestamp(9))/1000000000, {coltype.precision}))"
+            # Round the epoch to the desired precision, then reconstruct timestamp
+            timestamp = f"to_timestamp_ntz(round(date_part(epoch_nanosecond, {value})::number / 1000000000, {coltype.precision}))"
         else:
-            timestamp = f"cast(convert_timezone('UTC', {value}) as timestamp({coltype.precision}))"
+            # Truncate by casting to lower precision (truncation, no rounding)
+            timestamp = f"cast({value} as timestamp_ntz({coltype.precision}))"
 
-        return f"to_char({timestamp}, 'YYYY-MM-DD HH24:MI:SS.FF3')"
+        # Always format with exactly 3 fractional digits to match MySQL output
+        return f"to_char({timestamp}::timestamp_ntz(3), 'YYYY-MM-DD HH24:MI:SS.FF3')"
 
     def normalize_number(self, value: str, coltype: FractionalType) -> str:
         return self.to_string(f"cast({value} as decimal(38, {coltype.precision}))")
