@@ -280,6 +280,21 @@ class HashDiffer(TableDiffer):
             info_tree.info.rowcounts = {1: len(rows1), 2: len(rows2)}
 
             logger.info(". " * level + f"Diff found {len(diff)} different rows.")
+            n_keys = len(table1.key_columns)
+            seen_keys = set()
+            for sign, row in diff:
+                key = row[:n_keys]
+                if key not in seen_keys:
+                    seen_keys.add(key)
+                    other_sign = "-" if sign == "+" else "+"
+                    pair = [(sign, row)]
+                    for s2, r2 in diff:
+                        if r2[:n_keys] == key and s2 == other_sign:
+                            pair.append((s2, r2))
+                            break
+                    logger.info(". " * level + f"  sample pk={key}: " + " | ".join(f"{s} {r[n_keys:]}" for s, r in pair))
+                if len(seen_keys) >= 2:
+                    break
             self.stats["rows_downloaded"] = self.stats.get("rows_downloaded", 0) + max(len(rows1), len(rows2))
             return diff
 
