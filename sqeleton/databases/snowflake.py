@@ -48,12 +48,15 @@ class Mixin_MD5(AbstractMixin_MD5):
 
 class Mixin_NormalizeValue(AbstractMixin_NormalizeValue):
     def normalize_timestamp(self, value: str, coltype: TemporalType) -> str:
-        if coltype.rounds:
+        if isinstance(coltype, Date):
+            # DATE has no time component; epoch_nanosecond is invalid on DATE
+            timestamp = f"cast({value} as timestamp_ntz(0))"
+        elif coltype.rounds:
             # Round the epoch to the desired precision, then reconstruct timestamp
-            timestamp = f"to_timestamp_ntz(round(date_part(epoch_nanosecond, {value})::number / 1000000000, {coltype.precision}))"
+            timestamp = f"to_timestamp_ntz(round(date_part(epoch_nanosecond, {value})::number / 1000000000, 3))"
         else:
             # Truncate by casting to lower precision (truncation, no rounding)
-            timestamp = f"cast({value} as timestamp_ntz({coltype.precision}))"
+            timestamp = f"cast({value} as timestamp_ntz(3))"
 
         # Always format with exactly 3 fractional digits to match MySQL output
         return f"to_char({timestamp}::timestamp_ntz(3), 'YYYY-MM-DD HH24:MI:SS.FF3')"
