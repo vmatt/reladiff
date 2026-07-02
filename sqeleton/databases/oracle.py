@@ -53,14 +53,7 @@ class Mixin_NormalizeValue(AbstractMixin_NormalizeValue):
         return f"CAST(TRIM({value}) AS VARCHAR(36))"
 
     def normalize_timestamp(self, value: str, coltype: TemporalType) -> str:
-        if coltype.rounds:
-            return f"to_char(cast({value} as timestamp({coltype.precision})), 'YYYY-MM-DD HH24:MI:SS.FF3')"
-
-        if coltype.precision > 0:
-            truncated = f"to_char({value}, 'YYYY-MM-DD HH24:MI:SS.FF{coltype.precision}')"
-        else:
-            truncated = f"to_char({value}, 'YYYY-MM-DD HH24:MI:SS.')"
-        return f"RPAD({truncated}, {TIMESTAMP_PRECISION_POS+3}, '0')"
+        return f"to_char(cast({value} as timestamp(3)), 'YYYY-MM-DD HH24:MI:SS.FF3')"
 
     def normalize_number(self, value: str, coltype: FractionalType) -> str:
         # FM999.9990
