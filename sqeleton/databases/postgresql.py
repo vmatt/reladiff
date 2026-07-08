@@ -37,13 +37,7 @@ class Mixin_MD5(AbstractMixin_MD5):
 
 class Mixin_NormalizeValue(AbstractMixin_NormalizeValue):
     def normalize_timestamp(self, value: str, coltype: TemporalType) -> str:
-        if coltype.rounds:
-            return f"to_char({value}::timestamp({coltype.precision}), 'YYYY-mm-dd HH24:MI:SS.US')"
-
-        timestamp6 = f"to_char({value}::timestamp(6), 'YYYY-mm-dd HH24:MI:SS.US')"
-        return (
-            f"RPAD(LEFT({timestamp6}, {TIMESTAMP_PRECISION_POS+min(coltype.precision, 3)}), {TIMESTAMP_PRECISION_POS+3}, '0')"
-        )
+        return f"to_char({value}::timestamp(3), 'YYYY-mm-dd HH24:MI:SS.MS')"
 
     def normalize_number(self, value: str, coltype: FractionalType) -> str:
         return self.to_string(f"{value}::decimal(38, {coltype.precision})")
